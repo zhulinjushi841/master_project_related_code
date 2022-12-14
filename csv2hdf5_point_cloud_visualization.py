@@ -124,11 +124,18 @@ def load_h5(h5_filename):
 # read the .csv format data files.
 # df = pd.read_csv('C:/Users/84168/Desktop/export_data_V3ljhJBtZDw5kFg66e0Z8.csv')
 # store all the data in one dataset.
-# Before running this code, change the following parameter to the number of postures.
-dataperdataset = np.zeros((5, 256, 4), dtype = float)
+# Before running this code, change the following parameter according to the number of postures.
 
-for k in range(5):      # k = the number of postures
-    filename = 'D:/下载/multiposture_data_set/hunker/hunker_'+ str(k+1) +'.csv'
+# 1st dim:number of postures. 2nd dim: point index. 3rd dim: parameter index
+# for spherical coordinates:range, azimuth, elevation, doppler
+# for Cartesian coordinates:x, y, z, doppler
+
+
+dataperdatasetSpherical = np.zeros((21, 256, 4), dtype = float)
+dataperdatasetXYZ = np.zeros((21, 256, 4), dtype = float)
+
+for k in range(105):      # k = the number of postures
+    filename = 'D:/下载/multiposture_data_set/bow_1/' +str(k+1) +'.csv'
     # df = pd.read_csv('D:/下载/multiposture_data_set/bow/bow_2.csv')
     df = pd.read_csv(filename)
     dic1 = df.to_dict()  # transfer the data to dict class
@@ -146,7 +153,8 @@ for k in range(5):      # k = the number of postures
     # print(frame_num)
     num_pointcloud = 0   # the number of points taken into the process.
 
-    for i in range(80):
+    # choose the front m frames to accumulate data.
+    for i in range(50):
         # get the point cloud in one single frame
         total_length = len(dic1['points'][i])
         data_per_frame = dic1['points'][i][1:total_length-1]
@@ -158,14 +166,20 @@ for k in range(5):      # k = the number of postures
 
         # store the data in the corresponding lists
         for j in range(point_num):
-            range_point.append(dict_per_frame[j]["range"]*rangeUnit)
-            azimuth.append(dict_per_frame[j]["azimuth"]*azimuthUnit)
-            elevation.append(dict_per_frame[j]["elevation"]*elevationUnit)
-            doppler.append(dict_per_frame[j]["doppler"]*dopplerUnit)
+            # use point cloud classification algorithm to optimize the point cloud
+            X = (dict_per_frame[j]["range"]*rangeUnit) * math.cos(dict_per_frame[j]["elevation"]*elevationUnit) * math.sin(dict_per_frame[j]["azimuth"]*azimuthUnit)
+            Y = (dict_per_frame[j]["range"]*rangeUnit) * math.cos(dict_per_frame[j]["elevation"]*elevationUnit) * math.cos(dict_per_frame[j]["azimuth"]*azimuthUnit)
+            Z = (dict_per_frame[j]["range"]*rangeUnit) * math.sin(dict_per_frame[j]["elevation"]*elevationUnit)
+            V = dict_per_frame[j]["doppler"]*dopplerUnit
+            if Z < 1.5 and V != 0.0:
+                range_point.append(dict_per_frame[j]["range"]*rangeUnit)
+                azimuth.append(dict_per_frame[j]["azimuth"]*azimuthUnit)
+                elevation.append(dict_per_frame[j]["elevation"]*elevationUnit)
+                doppler.append(dict_per_frame[j]["doppler"]*dopplerUnit)
 
         num_pointcloud = num_pointcloud + point_num
 
-    # store the data in the single posture sample, which mincludes all the feature of one single posture.
+    # store the data in the single posture sample, which includes all the feature of one single posture.
     dataperposture = np.zeros((1, 256, 4), dtype=float)
     if num_pointcloud >= 256:
         for i in range(256):
@@ -174,23 +188,22 @@ for k in range(5):      # k = the number of postures
             dataperposture[0][i][2] = azimuth[i]
             dataperposture[0][i][3] = doppler[i]
 
-    # transfer data from dataperframe
+    # Transfer data from dataperframe to dataperdatasetSpherical.
     for m in range(256):
-        dataperdataset[k][m][0] = dataperposture[0][m][0]
-        dataperdataset[k][m][1] = dataperposture[0][m][1]
-        dataperdataset[k][m][2] = dataperposture[0][m][2]
-        dataperdataset[k][m][3] = dataperposture[0][m][3]
+        dataperdatasetSpherical[k][m][0] = dataperposture[0][m][0]
+        dataperdatasetSpherical[k][m][1] = dataperposture[0][m][1]
+        dataperdatasetSpherical[k][m][2] = dataperposture[0][m][2]
+        dataperdatasetSpherical[k][m][3] = dataperposture[0][m][3]
 
-print(dataperdataset)
-print(dataperdataset.shape)
+    # Transfer data from Spherical coordinates to Cartesian coordinates.
+    for m in range(256):
+        dataperdatasetXYZ[k][m][0] = dataperdatasetSpherical[k][m][0] * math.cos(dataperdatasetSpherical[k][m][1]) * math.sin(dataperdatasetSpherical[k][m][2])
+        dataperdatasetXYZ[k][m][1] = dataperdatasetSpherical[k][m][0] * math.cos(dataperdatasetSpherical[k][m][1]) * math.cos(dataperdatasetSpherical[k][m][2])
+        dataperdatasetXYZ[k][m][2] = dataperdatasetSpherical[k][m][0] * math.sin(dataperdatasetSpherical[k][m][1])
+        dataperdatasetXYZ[k][m][3] = dataperdatasetSpherical[k][m][3]
 
-
-# range_point = np.array(range_point)
-# range_point.reshape()
-
-
-
-
+print(dataperdatasetXYZ)
+print(dataperdatasetXYZ.shape)
 
 
 # print(num_pointcloud)
@@ -198,17 +211,18 @@ print(dataperdataset.shape)
 # print(dataperframe.shape)
 # print(type(dataperframe))
 
-
 # ----------------------------------------------------------------------
 # Transfer data from Spherical coordinates to Cartesian coordinates.
+
+# temporarily store the data
 x = []
 y = []
 z = []
-index = 4
+index = 10    # choose which posture to visualize 37 15
 for i in range(256):
-    x.append(dataperdataset[index][i][0]*math.cos(dataperdataset[index][i][1])*math.sin(dataperdataset[index][i][2]))
-    y.append(dataperdataset[index][i][0]*math.cos(dataperdataset[index][i][1])*math.cos(dataperdataset[index][i][2]))
-    z.append(dataperdataset[index][i][0]*math.sin(dataperdataset[index][i][1]))
+    x.append(dataperdatasetSpherical[index][i][0] * math.cos(dataperdatasetSpherical[index][i][1]) * math.sin(dataperdatasetSpherical[index][i][2]))
+    y.append(dataperdatasetSpherical[index][i][0] * math.cos(dataperdatasetSpherical[index][i][1]) * math.cos(dataperdatasetSpherical[index][i][2]))
+    z.append(dataperdatasetSpherical[index][i][0] * math.sin(dataperdatasetSpherical[index][i][1]))
 
 
 
@@ -228,14 +242,17 @@ plt.show()
 # # ==================================================================
 # # generate data set of the HDF5 format.
 # Label = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,0,0,0,0]
-# total_data_set = np.array(total_data_set)
+# Label = []
+# for i in range(105):
+#     Label.append(0)
+# print(Label)
+# dataperdatasetXYZ = np.array(dataperdatasetXYZ)
 # hdf5_filename = ('/media/jerome/Sumsang/PointNet+训练集生成代码/PointNet/pointnet/fall_train100')
-# save_h5(hdf5_filename, total_data_set, Label)
+# save_h5(hdf5_filename, dataperdatasetXYZ, Label)
 
 
 
-
-
+# ========================================================================================================
 
 
 
@@ -261,6 +278,8 @@ plt.show()
 # Label = 'Fall'
 # hdf5_filename = r'C:User\84168\Desktop\fall_train2'
 # save_h5(hdf5_filename, dataperframe, Label)
+
+
 
 
 
